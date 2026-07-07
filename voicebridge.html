@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Voice Bridge">
+<title>Voice Bridge</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #FDF6EE;
+    --surface: #FFFFFF;
+    --border: #E8DDD0;
+    --text-primary: #2C1810;
+    --text-secondary: #8B6F5E;
+    --accent: #E8845A;
+    --accent-light: #FDE8DC;
+    --green: #5B9E7A;
+    --green-light: #E0F0E8;
+    --red: #C0392B;
+    --shadow: 0 4px 24px rgba(44,24,16,0.10);
+  }
+
+  body {
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* SCREENS */
+  .screen { display: none; flex-direction: column; flex: 1; padding: 0; }
+  .screen.active { display: flex; }
+
+  /* HEADER */
+  .header {
+    padding: 56px 24px 20px;
+    text-align: center;
+  }
+  .app-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* MAIN LISTEN SCREEN */
+  .listen-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 32px;
+  }
+
+  .mic-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .mic-btn {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    box-shadow: 0 8px 32px rgba(232,132,90,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+  }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn.listening {
+    background: var(--red);
+    box-shadow: 0 8px 32px rgba(192,57,43,0.4);
+    animation: micpulse 1.2s ease-in-out infinite;
+  }
+  .mic-btn.processing {
+    background: #7B8FA1;
+    box-shadow: 0 8px 32px rgba(123,143,161,0.4);
+  }
+  @keyframes micpulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 8px 32px rgba(192,57,43,0.4); }
+    50% { transform: scale(1.06); box-shadow: 0 12px 48px rgba(192,57,43,0.6); }
+  }
+
+  .mic-icon { font-size: 72px; line-height: 1; }
+  .mic-label {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  /* RESULT CARD */
+  .result-card {
+    width: 100%;
+    background: var(--surface);
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    transition: border-color 0.3s;
+  }
+  .result-card.has-result { border-color: var(--green); }
+  .result-card.has-error { border-color: var(--accent); }
+
+  .result-text {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    line-height: 1.3;
+  }
+  .result-placeholder {
+    font-size: 17px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .confidence-row {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .confidence-track {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .confidence-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--green);
+    transition: width 0.5s ease;
+  }
+  .confidence-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  /* THUMBS ROW */
+  .thumbs-row {
+    width: 100%;
+    display: flex;
+    gap: 16px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+  }
+  .thumbs-row.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+  }
+  .thumb-btn {
+    flex: 1;
+    padding: 18px;
+    border-radius: 16px;
+    border: none;
+    font-size: 36px;
+    cursor: pointer;
+    transition: transform 0.12s, opacity 0.12s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .thumb-btn:active { transform: scale(0.93); }
+  .thumb-btn span {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .btn-thumbsup { background: var(--green-light); color: var(--green); }
+  .btn-thumbsdown { background: var(--accent-light); color: var(--accent); }
+
+  /* SPEAK AGAIN BUTTON */
+  .speak-again-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.1s;
+    background: var(--green);
+    color: white;
+    display: none;
+  }
+  .speak-again-btn:active { transform: scale(0.97); opacity: 0.85; }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    padding: 12px 24px 32px;
+    display: flex;
+    justify-content: center;
+  }
+  .settings-btn {
+    background: none;
+    border: none;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 99px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* SETTINGS SCREEN */
+  .settings-header {
+    padding: 56px 24px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .back-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--accent);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+  .settings-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .settings-body {
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .settings-section {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .settings-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 14px 16px 8px;
+  }
+  .settings-row {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .settings-row:first-of-type { border-top: none; }
+  .settings-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .settings-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 14px;
+    color: var(--text-primary);
+    font-family: monospace;
+    -webkit-appearance: none;
+  }
+  .settings-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .settings-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .save-btn {
+    width: 100%;
+    padding: 18px;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    margin: 4px 0 8px;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  .save-btn:active { transform: scale(0.98); opacity: 0.9; }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 0 16px 14px;
+  }
+  .badge-ok { background: var(--green-light); color: var(--green); }
+  .badge-warn { background: var(--accent-light); color: var(--accent); }
+
+  .settings-footer { padding: 16px 24px 40px; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text-primary);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 99px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: transform 0.3s ease;
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* WAVE ANIMATION */
+  .wave-bars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+  }
+  .wave-bar {
+    width: 5px;
+    border-radius: 99px;
+    background: white;
+    animation: wave 0.8s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1) { animation-delay: 0s; }
+  .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+  .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+  .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+  .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+  @keyframes wave {
+    0%, 100% { height: 8px; opacity: 0.6; }
+    50% % { height: 36px; opacity: 1; }
+    50% { height: 36px; opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LISTEN SCREEN -->
+  <div id="screen-listen" class="screen active">
+    <div class="header">
+      <div class="app-name">Voice Bridge</div>
+    </div>
+
+    <div class="listen-body">
+      <div class="mic-container">
+        <button class="mic-btn" id="mic-btn" onclick="handleMicTap()">
+          <span class="mic-icon" id="mic-icon">🎙️</span>
+        </button>
+        <div class="mic-label" id="mic-label">Tap to speak</div>
+      </div>
+
+      <div class="result-card" id="result-card">
+        <div class="result-placeholder" id="result-placeholder">Carolyn's words will appear here</div>
+        <div class="result-text" id="result-text" style="display:none;"></div>
+        <div class="confidence-row" id="confidence-row" style="display:none;">
+          <div class="confidence-track">
+            <div class="confidence-fill" id="confidence-fill" style="width:0%"></div>
+          </div>
+          <div class="confidence-label" id="confidence-label"></div>
+        </div>
+      </div>
+
+      <div class="thumbs-row" id="thumbs-row">
+        <button class="thumb-btn btn-thumbsup" onclick="thumbsUp()">
+          👍<span>Yes!</span>
+        </button>
+        <button class="thumb-btn btn-thumbsdown" onclick="thumbsDown()">
+          👎<span>No</span>
+        </button>
+      </div>
+      <button class="speak-again-btn" id="speak-again-btn" onclick="speakResult()">
+        🔊 Say it again
+      </button>
+    </div>
+
+    <div class="bottom-nav">
+      <button class="settings-btn" onclick="showSettings()">
+        ⚙️ Settings
+      </button>
+    </div>
+  </div>
+
+  <!-- SETTINGS SCREEN -->
+  <div id="screen-settings" class="screen">
+    <div class="settings-header">
+      <button class="back-btn" onclick="showListen()">←</button>
+      <div class="settings-title">Settings</div>
+    </div>
+
+    <div class="settings-body">
+      <div id="connection-status"></div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Azure Speech Keys</div>
+        <div class="settings-row">
+          <div class="settings-label">API Key</div>
+          <input type="password" class="settings-input" id="input-key" placeholder="Paste Key 1 here" />
+          <div class="settings-hint">From your CarolynAppKeys.txt file</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">Region</div>
+          <input type="text" class="settings-input" id="input-region" placeholder="eastus" />
+          <div class="settings-hint">e.g. eastus</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">Endpoint ID</div>
+          <input type="text" class="settings-input" id="input-endpoint" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <div class="settings-hint">The UUID from your CarolynEndpoint deployment</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Claude AI Key</div>
+        <div class="settings-row">
+          <div class="settings-label">Anthropic API Key</div>
+          <input type="password" class="settings-input" id="input-claude" placeholder="sk-ant-..." />
+          <div class="settings-hint">From console.anthropic.com — used to clean up and complete Carolyn's sentences</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">About Carolyn</div>
+        <div class="settings-row">
+          <div class="settings-hint" style="font-size:13px; line-height:1.6;">
+            Voice Bridge is trained to understand Carolyn Soudan's world — her family (Bobby, Katie, Jennie, Bergen, Britt, Little Bobby, Payton, Joe, Nick, Joni), her home at Misericordia, her favorite places (Bobby's house, Katie's house, McDonald's), and the things she loves (Barbie movie, scrambled eggs, coffee, Tusker, Cooper). Claude AI uses this context to complete her fragmented sentences into clear speech.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-footer">
+      <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let azureKey = localStorage.getItem('vb_azure_key') || '';
+let azureRegion = localStorage.getItem('vb_azure_region') || 'eastus';
+let azureEndpoint = localStorage.getItem('vb_azure_endpoint') || '';
+let claudeKey = localStorage.getItem('vb_claude_key') || '';
+let lastResult = '';
+let isListening = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let silenceTimer = null;
+let audioContext = null;
+let analyser = null;
+let silenceStart = null;
+let thumbsTimer = null;
+const SILENCE_THRESHOLD = 0.01;
+const SILENCE_DURATION = 1800;
+const THUMBS_TIMEOUT = 6000; // thumbs disappear after 6 seconds if not pressed
+
+// Carolyn's world context for Claude
+const CAROLYN_CONTEXT = `You are helping translate Carolyn Soudan's speech. Carolyn has Down syndrome and her speech is slurred and often fragmented. She drops grammatical scaffolding and leads with the most important words.
+
+CAROLYN'S WORLD:
+- She lives at Misericordia in Chicago (full-time home for people with disabilities)
+- Her brother Bobby (also called Bob) lives in Winnetka with his wife Jennie and kids: Bergen, Little Bobby (engaged to Emma), and Britt (engaged to Anthony)
+- Her sister Katie lives in Winnetka with husband Rick and kids: Payton (boyfriend Alex Vlasik who plays for the Chicago Blackhawks), Joe, and Nick
+- Her parents are Bob and Connie (also called Mom and Dad) — they live in Glencoe IL May-Sep and Florida Oct-Apr
+- Family friend: Joni
+- Dogs she loves: Tusker (Bobby's), Lucky (Britt's), Cooper (Katie's), Oakley (Payton's)
+- Favorite food: scrambled eggs, pizza, McDonald's, hamburgers, spaghetti, lasagna, coffee, Coke
+- Favorite movies: Barbie movie, mermaid movie
+- Activities: Artist in All (art charity event), Misericordia Family Festival, watching TV, riding in the car
+- Physical: uses a walker, transitioning to wheelchair, her knees hurt
+- Big current topics: Britt's wedding to Anthony, Little Bobby's wedding to Emma
+- She says "yeah" to any yes/no question even if she means no — she volunteers real information unprompted
+
+SPEECH PATTERNS:
+- "Katie's house next weekend" = "I'm going to stay at Katie's house next weekend"
+- "Bobby tomorrow" = "Bobby is coming tomorrow" or "I'm going to Bobby's house tomorrow"  
+- "Bob and Connie Florida" = "Bob and Connie are in Florida"
+- "Britt wedding" = "Britt's wedding is coming up" or "I'm going to Britt's wedding"
+- She may say partial words or slur sounds together
+
+YOUR JOB:
+Given a rough speech-to-text transcript of what Carolyn said (which may be garbled), output ONLY the most likely complete sentence she meant to say. Keep it natural and in her voice. If the transcript is too unclear, output exactly: UNCLEAR
+Do not explain. Do not add quotation marks. Just the sentence.`;
+
+// ─── SCREENS ─────────────────────────────────────────────────────────────────
+function showSettings() {
+  document.getElementById('screen-listen').classList.remove('active');
+  document.getElementById('screen-settings').classList.add('active');
+  document.getElementById('input-key').value = azureKey;
+  document.getElementById('input-region').value = azureRegion;
+  document.getElementById('input-endpoint').value = azureEndpoint;
+  document.getElementById('input-claude').value = claudeKey;
+  renderConnectionStatus();
+}
+
+function showListen() {
+  document.getElementById('screen-settings').classList.remove('active');
+  document.getElementById('screen-listen').classList.add('active');
+}
+
+function renderConnectionStatus() {
+  const el = document.getElementById('connection-status');
+  const ready = azureKey && azureRegion && azureEndpoint && claudeKey;
+  el.innerHTML = ready
+    ? `<div class="status-badge badge-ok">✓ Ready to use</div>`
+    : `<div class="status-badge badge-warn">⚠ Enter your keys below to activate</div>`;
+}
+
+function saveSettings() {
+  azureKey = document.getElementById('input-key').value.trim();
+  azureRegion = document.getElementById('input-region').value.trim() || 'eastus';
+  azureEndpoint = document.getElementById('input-endpoint').value.trim();
+  claudeKey = document.getElementById('input-claude').value.trim();
+  localStorage.setItem('vb_azure_key', azureKey);
+  localStorage.setItem('vb_azure_region', azureRegion);
+  localStorage.setItem('vb_azure_endpoint', azureEndpoint);
+  localStorage.setItem('vb_claude_key', claudeKey);
+  showToast('Settings saved ✓');
+  setTimeout(showListen, 800);
+}
+
+// ─── MIC & RECORDING ─────────────────────────────────────────────────────────
+function handleMicTap() {
+  if (isListening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+}
+
+async function startListening() {
+  if (!azureKey || !azureEndpoint) {
+    showToast('Please add your Azure keys in Settings first');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    isListening = true;
+    audioChunks = [];
+
+    // Set up audio analysis for silence detection
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+    analyser.fftSize = 512;
+    silenceStart = null;
+    monitorSilence(stream);
+
+    // Set up recorder
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      processAudio();
+    };
+    mediaRecorder.start(100);
+
+    // UI
+    setListeningUI();
+    clearResult();
+
+  } catch(e) {
+    showToast('Microphone access needed — check browser settings');
+  }
+}
+
+function monitorSilence(stream) {
+  if (!isListening) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum += Math.abs(data[i] - 128);
+  }
+  const avg = sum / data.length / 128;
+
+  if (avg < SILENCE_THRESHOLD) {
+    if (!silenceStart) silenceStart = Date.now();
+    else if (Date.now() - silenceStart > SILENCE_DURATION) {
+      stopListening();
+      return;
+    }
+  } else {
+    silenceStart = null;
+  }
+  requestAnimationFrame(() => monitorSilence(stream));
+}
+
+function stopListening() {
+  if (!isListening) return;
+  isListening = false;
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  setProcessingUI();
+}
+
+async function processAudio() {
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  
+  try {
+    // Step 1: Send to Azure Custom Speech
+    const rawTranscript = await sendToAzure(blob);
+    
+    if (!rawTranscript || rawTranscript.trim() === '') {
+      showNoMatch();
+      return;
+    }
+
+    // Step 2: Send to Claude for intelligent completion
+    const cleaned = await sendToClaude(rawTranscript);
+
+    if (!cleaned || cleaned === 'UNCLEAR') {
+      showNoMatch();
+      return;
+    }
+
+    showResult(cleaned, 0.85);
+    speakResult();
+
+  } catch(e) {
+    console.error(e);
+    showNoMatch();
+  }
+}
+
+// ─── AZURE SPEECH ─────────────────────────────────────────────────────────────
+async function sendToAzure(audioBlob) {
+  // Convert to WAV for Azure
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  
+  const url = `https://${azureRegion}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=detailed&cid=${azureEndpoint}`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': azureKey,
+      'Content-Type': 'audio/webm; codecs=opus',
+      'Accept': 'application/json'
+    },
+    body: audioBlob
+  });
+
+  if (!response.ok) {
+    throw new Error(`Azure error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  if (data.RecognitionStatus === 'Success' && data.NBest && data.NBest.length > 0) {
+    return data.NBest[0].Display;
+  }
+  
+  return '';
+}
+
+// ─── CLAUDE AI ────────────────────────────────────────────────────────────────
+async function sendToClaude(rawText) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': claudeKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-calls': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 150,
+      system: CAROLYN_CONTEXT,
+      messages: [{ role: 'user', content: `Azure heard: "${rawText}"\n\nWhat did Carolyn mean to say?` }]
+    })
+  });
+
+  if (!response.ok) throw new Error('Claude error');
+  const data = await response.json();
+  return data.content[0].text.trim();
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function setListeningUI() {
+  const btn = document.getElementById('mic-btn');
+  const icon = document.getElementById('mic-icon');
+  const label = document.getElementById('mic-label');
+  btn.classList.add('listening');
+  btn.classList.remove('processing');
+  icon.innerHTML = `<div class="wave-bars">
+    <div class="wave-bar"></div>
+    <div class="wave-bar"></div>
+    <div class="wave-bar"></div>
+    <div class="wave-bar"></div>
+    <div class="wave-bar"></div>
+  </div>`;
+  label.textContent = 'Listening… tap to stop';
+}
+
+function setProcessingUI() {
+  const btn = document.getElementById('mic-btn');
+  const icon = document.getElementById('mic-icon');
+  const label = document.getElementById('mic-label');
+  btn.classList.remove('listening');
+  btn.classList.add('processing');
+  icon.textContent = '⏳';
+  label.textContent = 'Working on it…';
+}
+
+function resetMicUI() {
+  const btn = document.getElementById('mic-btn');
+  const icon = document.getElementById('mic-icon');
+  const label = document.getElementById('mic-label');
+  btn.classList.remove('listening', 'processing');
+  icon.textContent = '🎙️';
+  label.textContent = 'Tap to speak';
+}
+
+function clearResult() {
+  document.getElementById('result-placeholder').style.display = '';
+  document.getElementById('result-placeholder').textContent = "Carolyn's words will appear here";
+  document.getElementById('result-text').style.display = 'none';
+  document.getElementById('confidence-row').style.display = 'none';
+  document.getElementById('result-card').classList.remove('has-result', 'has-error');
+  document.getElementById('thumbs-row').classList.remove('visible');
+  document.getElementById('speak-again-btn').style.display = 'none';
+  clearThumbsTimer();
+  lastResult = '';
+}
+
+function showResult(text, confidence) {
+  resetMicUI();
+  lastResult = text;
+  document.getElementById('result-placeholder').style.display = 'none';
+  const rt = document.getElementById('result-text');
+  rt.textContent = text;
+  rt.style.display = '';
+
+  const pct = Math.round(confidence * 100);
+  document.getElementById('confidence-fill').style.width = pct + '%';
+  document.getElementById('confidence-fill').style.background = pct > 70 ? '#5B9E7A' : '#E8845A';
+  document.getElementById('confidence-label').textContent = pct + '% confident';
+  document.getElementById('confidence-row').style.display = '';
+
+  document.getElementById('result-card').classList.add('has-result');
+  document.getElementById('result-card').classList.remove('has-error');
+
+  // Show thumbs with auto-dismiss
+  showThumbs();
+}
+
+function showNoMatch() {
+  resetMicUI();
+  lastResult = '';
+  document.getElementById('result-placeholder').style.display = '';
+  document.getElementById('result-placeholder').textContent = "Couldn't understand — please try again";
+  document.getElementById('result-text').style.display = 'none';
+  document.getElementById('confidence-row').style.display = 'none';
+  document.getElementById('result-card').classList.add('has-error');
+  document.getElementById('result-card').classList.remove('has-result');
+  document.getElementById('thumbs-row').classList.remove('visible');
+  document.getElementById('speak-again-btn').style.display = 'none';
+  askRepeat();
+}
+
+function showThumbs() {
+  document.getElementById('thumbs-row').classList.add('visible');
+  document.getElementById('speak-again-btn').style.display = 'none';
+  clearThumbsTimer();
+  thumbsTimer = setTimeout(() => {
+    hideThumbs();
+  }, THUMBS_TIMEOUT);
+}
+
+function hideThumbs() {
+  document.getElementById('thumbs-row').classList.remove('visible');
+  if (lastResult) {
+    document.getElementById('speak-again-btn').style.display = '';
+  }
+}
+
+function clearThumbsTimer() {
+  if (thumbsTimer) { clearTimeout(thumbsTimer); thumbsTimer = null; }
+}
+
+function thumbsUp() {
+  clearThumbsTimer();
+  hideThumbs();
+  showToast('Great! 👍');
+}
+
+function thumbsDown() {
+  clearThumbsTimer();
+  hideThumbs();
+  clearResult();
+  askRepeat();
+}
+
+function speakResult() {
+  if (!lastResult) return;
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(lastResult);
+  utt.rate = 0.85;
+  utt.pitch = 1;
+  utt.volume = 1;
+  speechSynthesis.speak(utt);
+}
+
+function askRepeat() {
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance('Please say that again more slowly.');
+  utt.rate = 0.8;
+  speechSynthesis.speak(utt);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Init
+renderConnectionStatus();
+</script>
+</body>
+</html>
