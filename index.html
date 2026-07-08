@@ -966,16 +966,19 @@ function thumbsDown() {
 function speakResult() {
   if (!lastResult) return;
   speechSynthesis.cancel();
-  // Small delay needed for Chrome iOS to allow speech after async operations
   setTimeout(() => {
     const utt = new SpeechSynthesisUtterance(lastResult);
     utt.rate = 0.85;
     utt.pitch = 1;
     utt.volume = 1;
-    utt.onstart = () => debug('Speaking...');
+    utt.lang = 'en-US';
+    // iOS Safari fix — select a specific voice
+    const voices = speechSynthesis.getVoices();
+    const enVoice = voices.find(v => v.lang.startsWith('en'));
+    if (enVoice) utt.voice = enVoice;
     utt.onerror = (e) => debug('Speech error: ' + e.error);
     speechSynthesis.speak(utt);
-  }, 300);
+  }, 500);
 }
 
 function askRepeat() {
@@ -983,9 +986,17 @@ function askRepeat() {
   setTimeout(() => {
     const utt = new SpeechSynthesisUtterance('Please say that again more slowly.');
     utt.rate = 0.8;
+    utt.lang = 'en-US';
+    const voices = speechSynthesis.getVoices();
+    const enVoice = voices.find(v => v.lang.startsWith('en'));
+    if (enVoice) utt.voice = enVoice;
     speechSynthesis.speak(utt);
   }, 300);
 }
+
+// Pre-load voices on page load
+speechSynthesis.getVoices();
+window.speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); };
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -999,3 +1010,4 @@ renderConnectionStatus();
 </script>
 </body>
 </html>
+
