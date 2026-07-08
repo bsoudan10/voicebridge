@@ -428,6 +428,11 @@
         </div>
       </div>
 
+      <!-- DEBUG BOX — remove later -->
+      <div id="debug-box" style="width:100%;background:#f0f0f0;border-radius:10px;padding:10px;font-size:11px;font-family:monospace;color:#333;max-height:120px;overflow-y:auto;display:block;">
+        Debug info will appear here...
+      </div>
+
       <div class="thumbs-row" id="thumbs-row">
         <button class="thumb-btn btn-thumbsup" onclick="thumbsUp()">
           👍<span>Yes!</span>
@@ -587,6 +592,15 @@ let scriptProcessor = null;
 let pcmChunks = [];
 let activeStream = null;
 
+function debug(msg) {
+  const box = document.getElementById('debug-box');
+  if (box) {
+    box.innerHTML += '<br>' + msg;
+    box.scrollTop = box.scrollHeight;
+  }
+  console.log(msg);
+}
+
 function handleMicTap() {
   if (isListening) {
     stopListening();
@@ -611,6 +625,7 @@ async function startListening() {
     pcmChunks = [];
     clearResult();
     setListeningUI();
+    debug('Mic started. Sample rate: ' + (audioContext ? 'pending' : 'unknown'));
 
     // Capture raw PCM using Web Audio API
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -687,13 +702,12 @@ function buildWav(chunks, sampleRate) {
 
 async function processAudio() {
   try {
-    // Resample to 16kHz if needed
     const sampleRate = 16000;
     const wavBlob = buildWav(pcmChunks, sampleRate);
-    console.log('WAV blob size:', wavBlob.size);
+    debug('WAV size: ' + wavBlob.size + ' bytes, chunks: ' + pcmChunks.length);
 
     const rawTranscript = await sendToAzure(wavBlob);
-    console.log('Azure transcript:', rawTranscript);
+    debug('Azure said: ' + (rawTranscript || '(empty)'));
 
     if (!rawTranscript || rawTranscript.trim() === '') {
       showNoMatch();
@@ -701,7 +715,7 @@ async function processAudio() {
     }
 
     const cleaned = await sendToClaude(rawTranscript);
-    console.log('Claude result:', cleaned);
+    debug('Claude said: ' + (cleaned || '(empty)'));
 
     if (!cleaned || cleaned === 'UNCLEAR') {
       showNoMatch();
@@ -712,7 +726,7 @@ async function processAudio() {
     speakResult();
 
   } catch(e) {
-    console.error('Error:', e);
+    debug('ERROR: ' + e.message);
     showToast('Error: ' + e.message);
     showNoMatch();
   }
@@ -733,15 +747,16 @@ async function sendToAzure(wavBlob) {
   });
 
   console.log('Azure status:', response.status);
+  debug('Azure HTTP status: ' + response.status);
 
   if (!response.ok) {
     const text = await response.text();
-    console.error('Azure error:', text);
+    debug('Azure error body: ' + text);
     throw new Error(`Azure ${response.status}`);
   }
 
   const data = await response.json();
-  console.log('Azure data:', JSON.stringify(data));
+  debug('Azure RecognitionStatus: ' + data.RecognitionStatus);
 
   if (data.RecognitionStatus === 'Success' && data.NBest && data.NBest.length > 0) {
     return data.NBest[0].Display;
