@@ -625,10 +625,13 @@ async function startListening() {
     pcmChunks = [];
     clearResult();
     setListeningUI();
-    debug('Mic started. Sample rate: ' + (audioContext ? 'pending' : 'unknown'));
 
     // Capture raw PCM using Web Audio API
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const actualRate = audioContext.sampleRate;
+    window._lastActualRate = actualRate;
+    audioContext._actualRate = actualRate;
+    debug('Mic started. Actual sample rate: ' + actualRate);
     const source = audioContext.createMediaStreamSource(stream);
     scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -702,9 +705,32 @@ function buildWav(chunks, sampleRate) {
 
 async function processAudio() {
   try {
-    const sampleRate = 16000;
-    const wavBlob = buildWav(pcmChunks, sampleRate);
-    debug('WAV size: ' + wavBlob.size + ' bytes, chunks: ' + pcmChunks.length);
+    // Get the actual sample rate from stored value
+    const actualSampleRate = window._lastActualRate || 44100;
+    const targetSampleRate = 16000;
+
+    // Combine all PCM chunks
+    const totalSamples = pcmChunks.reduce((s, c) => s + c.length, 0);
+    const combined = new Float32Array(totalSamples);
+    let offset = 0;
+    for (const c of pcmChunks) {
+      for (let i = 0; i < c.length; i++) {
+        combined[offset + i] = c[i] / 32767;
+      }
+      offset += c.length;
+    }
+
+    // Resample from actual rate to 16kHz
+    const ratio = targetSampleRate / actualSampleRate;
+    const resampledLength = Math.floor(combined.length * ratio);
+    const resampled = new Int16Array(resampledLength);
+    for (let i = 0; i < resampledLength; i++) {
+      const srcIdx = Math.floor(i / ratio);
+      resampled[i] = Math.max(-32768, Math.min(32767, Math.floor(combined[srcIdx] * 32767)));
+    }
+
+    const wavBlob = buildWavFromInt16(resampled, targetSampleRate);
+    debug('WAV size: ' + wavBlob.size + ' bytes, resampled: ' + totalSamples + '->' + resampledLength);
 
     const rawTranscript = await sendToAzure(wavBlob);
     debug('Azure said: ' + (rawTranscript || '(empty)'));
@@ -730,6 +756,28 @@ async function processAudio() {
     showToast('Error: ' + e.message);
     showNoMatch();
   }
+}
+
+function buildWavFromInt16(pcm, sampleRate) {
+  const dataSize = pcm.byteLength;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + dataSize, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, 'data');
+  v.setUint32(40, dataSize, true);
+  new Uint8Array(buf, 44).set(new Uint8Array(pcm.buffer));
+  return new Blob([buf], { type: 'audio/wav' });
 }
 
 // ─── AZURE SPEECH ─────────────────────────────────────────────────────────────
