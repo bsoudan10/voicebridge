@@ -510,7 +510,7 @@ let claudeKey = localStorage.getItem('vb_claude_key') || '';
 let lastResult = '';
 let isListening = false;
 let thumbsTimer = null;
-const THUMBS_TIMEOUT = 6000;
+const THUMBS_TIMEOUT = 15000;
 
 // Carolyn's world context for Claude
 const CAROLYN_CONTEXT = `You are helping translate Carolyn Soudan's speech. Carolyn has Down syndrome and her speech is slurred and often fragmented. She drops grammatical scaffolding and leads with the most important words.
@@ -537,8 +537,27 @@ SPEECH PATTERNS:
 - She may say partial words or slur sounds together
 
 YOUR JOB:
-Given a rough speech-to-text transcript of what Carolyn said (which may be garbled), output ONLY the most likely complete sentence she meant to say. Keep it natural and in her voice. If the transcript is too unclear, output exactly: UNCLEAR
-Do not explain. Do not add quotation marks. Just the sentence.`;
+You are a speech clarifier for Carolyn Soudan. Azure speech recognition has attempted to transcribe her slurred speech. Your job is to output the clearest, most accurate word-for-word version of exactly what she said — nothing more, nothing less.
+
+RULES:
+- Output ONLY the words she actually said, cleaned up and spelled correctly
+- Do NOT add any words she did not say
+- Do NOT complete sentences or add context
+- Do NOT make assumptions about what she meant
+- Fix spelling, clean up garbled words, use the correct names from her vocabulary
+- If completely unclear, output: UNCLEAR
+
+Examples:
+- Azure heard "little bah ee" → output: "Little Bobby"
+- Azure heard "kay tees house nex wee end" → output: "Katie's house next weekend"
+- Azure heard "birt day" → output: "birthday"
+- Azure heard "mizer kordia" → output: "Misericordia"
+- Azure heard "i wanna pizza" → output: "I want pizza"
+- Azure heard "britt weddin" → output: "Britt's wedding"
+
+The person listening will understand the full meaning. Your only job is to make her words clear.
+
+Do not explain. Do not add quotation marks. Just the cleaned up words.`;
 
 // ─── SCREENS ─────────────────────────────────────────────────────────────────
 function showSettings() {
