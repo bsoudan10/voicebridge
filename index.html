@@ -429,7 +429,7 @@
       </div>
 
       <!-- DEBUG BOX — remove later -->
-      <div id="debug-box" style="width:100%;background:#f0f0f0;border-radius:10px;padding:10px;font-size:11px;font-family:monospace;color:#333;max-height:120px;overflow-y:auto;display:block;">
+      <div id="debug-box" style="width:100%;background:#f0f0f0;border-radius:10px;padding:8px;font-size:10px;font-family:monospace;color:#333;max-height:80px;overflow-y:auto;display:block;">
         Debug info will appear here...
       </div>
 
@@ -947,18 +947,25 @@ function thumbsDown() {
 function speakResult() {
   if (!lastResult) return;
   speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(lastResult);
-  utt.rate = 0.85;
-  utt.pitch = 1;
-  utt.volume = 1;
-  speechSynthesis.speak(utt);
+  // Small delay needed for Chrome iOS to allow speech after async operations
+  setTimeout(() => {
+    const utt = new SpeechSynthesisUtterance(lastResult);
+    utt.rate = 0.85;
+    utt.pitch = 1;
+    utt.volume = 1;
+    utt.onstart = () => debug('Speaking...');
+    utt.onerror = (e) => debug('Speech error: ' + e.error);
+    speechSynthesis.speak(utt);
+  }, 300);
 }
 
 function askRepeat() {
   speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance('Please say that again more slowly.');
-  utt.rate = 0.8;
-  speechSynthesis.speak(utt);
+  setTimeout(() => {
+    const utt = new SpeechSynthesisUtterance('Please say that again more slowly.');
+    utt.rate = 0.8;
+    speechSynthesis.speak(utt);
+  }, 300);
 }
 
 function showToast(msg) {
