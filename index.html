@@ -818,6 +818,7 @@ async function sendToClaude(rawText) {
       'Content-Type': 'application/json',
       'x-api-key': claudeKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'output-128k-2025-02-19',
       'anthropic-dangerous-direct-browser-calls': 'true'
     },
     body: JSON.stringify({
@@ -828,7 +829,11 @@ async function sendToClaude(rawText) {
     })
   });
 
-  if (!response.ok) throw new Error('Claude error');
+  if (!response.ok) {
+    const errText = await response.text();
+    debug('Claude error: ' + response.status + ' ' + errText);
+    throw new Error('Claude error: ' + response.status);
+  }
   const data = await response.json();
   return data.content[0].text.trim();
 }
