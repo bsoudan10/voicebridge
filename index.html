@@ -793,7 +793,9 @@ async function processAudio() {
     const wavBlob = buildWavFromInt16(resampled, targetSampleRate);
     debug('WAV size: ' + wavBlob.size + ' bytes, resampled: ' + totalSamples + '->' + resampledLength);
 
-    const rawTranscript = await sendToAzure(wavBlob);
+    const azureResult = await sendToAzure(wavBlob);
+    const rawTranscript = azureResult.text;
+    const azureConfidence = azureResult.confidence;
     debug('Azure said: ' + (rawTranscript || '(empty)'));
 
     if (!rawTranscript || rawTranscript.trim() === '') {
@@ -809,7 +811,8 @@ async function processAudio() {
       return;
     }
 
-    showResult(cleaned, 0.85);
+    // Show Azure's real confidence. Fall back to 0.85 only if Azure gave none.
+    showResult(cleaned, azureConfidence !== null ? azureConfidence : 0.85);
     // No auto-speak: iOS Safari blocks speech after an async call.
     // The 🔊 button (shown by showResult) speaks on a direct tap, which iOS always allows.
 
@@ -869,9 +872,12 @@ async function sendToAzure(wavBlob) {
   debug('Azure RecognitionStatus: ' + data.RecognitionStatus);
 
   if (data.RecognitionStatus === 'Success' && data.NBest && data.NBest.length > 0) {
-    return data.NBest[0].Display;
+    const best = data.NBest[0];
+    const conf = typeof best.Confidence === 'number' ? best.Confidence : null;
+    debug('Azure confidence: ' + (conf !== null ? Math.round(conf * 100) + '%' : 'n/a'));
+    return { text: best.Display, confidence: conf };
   }
-  return '';
+  return { text: '', confidence: null };
 }
 async function sendToClaude(rawText) {
   const proxyUrl = 'https://carolyn-proxy.soudan10.workers.dev';
