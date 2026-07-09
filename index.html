@@ -406,7 +406,7 @@
   <!-- LISTEN SCREEN -->
   <div id="screen-listen" class="screen active">
     <div class="header">
-      <div class="app-name">Voice Bridge</div>
+      <div class="app-name" onclick="revealDebug()">Voice Bridge</div>
     </div>
 
     <div class="listen-body">
@@ -428,8 +428,8 @@
         </div>
       </div>
 
-      <!-- DEBUG BOX — remove later -->
-      <div id="debug-box" style="width:100%;background:#f0f0f0;border-radius:10px;padding:8px;font-size:10px;font-family:monospace;color:#333;max-height:80px;overflow-y:auto;display:block;">
+      <!-- DEBUG DRAWER — swipe up from bottom or triple-tap to reveal -->
+      <div id="debug-drawer" style="display:none;width:100%;background:#1a1a1a;border-radius:10px;padding:10px;font-size:10px;font-family:monospace;color:#00ff88;max-height:100px;overflow-y:auto;">
         Debug info will appear here...
       </div>
 
@@ -441,8 +441,43 @@
           👎<span>No</span>
         </button>
       </div>
-      <button class="speak-again-btn" id="speak-again-btn" onclick="speakResult()">
-        🔊 Say it again
+
+      <!-- SPEAK BUTTON — megaphone SVG icon -->
+      <button id="speak-again-btn" onclick="speakResult()" style="display:none;background:none;border:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;" aria-label="Tap to hear">
+        <svg width="110" height="110" viewBox="-160 -160 320 320" role="img">
+          <title>Tap to hear</title>
+          <circle cx="0" cy="0" r="155" fill="#F5C4B3"/>
+          <defs><clipPath id="circ2"><circle cx="0" cy="0" r="150"/></clipPath></defs>
+          <g clip-path="url(#circ2)">
+            <path d="M-55 -28 L-55 8 L-30 14 L-30 -34 Z" fill="#8B3820"/>
+            <path d="M-55 -28 L-30 -34 L10 -48 L-20 -38 Z" fill="#C05040"/>
+            <rect x="-55" y="-28" width="35" height="42" rx="4" fill="#A03828"/>
+            <rect x="-55" y="-28" width="35" height="8" rx="4" fill="#C04838"/>
+            <rect x="-55" y="6" width="35" height="8" rx="4" fill="#802818"/>
+            <line x1="-46" y1="-20" x2="-46" y2="10" stroke="#802818" stroke-width="1.5" opacity="0.6"/>
+            <line x1="-38" y1="-22" x2="-38" y2="10" stroke="#802818" stroke-width="1.5" opacity="0.6"/>
+            <line x1="-30" y1="-24" x2="-30" y2="10" stroke="#802818" stroke-width="1.5" opacity="0.6"/>
+            <path d="M-20 -38 L-20 22 L80 60 L80 -70 Z" fill="#A03828"/>
+            <path d="M-20 -38 L-20 -24 L80 -50 L80 -70 Z" fill="#C04838"/>
+            <path d="M-20 10 L-20 22 L80 60 L80 44 Z" fill="#6B1E10"/>
+            <ellipse cx="-20" cy="-8" rx="6" ry="30" fill="#C05040"/>
+            <ellipse cx="-20" cy="-8" rx="3" ry="26" fill="#E07060"/>
+            <ellipse cx="80" cy="-5" rx="8" ry="65" fill="#6B1E10"/>
+            <ellipse cx="80" cy="-5" rx="5" ry="58" fill="#3D0E08"/>
+            <ellipse cx="80" cy="-5" rx="2" ry="50" fill="#1A0400"/>
+            <rect x="-44" y="14" width="14" height="28" rx="6" fill="#802818"/>
+            <rect x="-42" y="15" width="6" height="26" rx="5" fill="#A03828"/>
+            <line x1="-44" y1="20" x2="-30" y2="20" stroke="#6B1E10" stroke-width="1.5"/>
+            <line x1="-44" y1="26" x2="-30" y2="26" stroke="#6B1E10" stroke-width="1.5"/>
+            <line x1="-44" y1="32" x2="-30" y2="32" stroke="#6B1E10" stroke-width="1.5"/>
+            <path d="M90 -20 Q108 -5 90 10" fill="none" stroke="#712B13" stroke-width="4" stroke-linecap="round"/>
+            <path d="M100 -34 Q124 -5 100 24" fill="none" stroke="#712B13" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M110 -48 Q140 -5 110 38" fill="none" stroke="#712B13" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+            <path d="M120 -60 Q154 -5 120 50" fill="none" stroke="#712B13" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+            <circle cx="-90" cy="-80" r="38" fill="#712B13" stroke="#F5C4B3" stroke-width="4"/>
+            <polygon points="-100,-96 -100,-64 -68,-80" fill="#FFFFFF"/>
+          </g>
+        </svg>
       </button>
     </div>
 
@@ -602,10 +637,25 @@ let scriptProcessor = null;
 let pcmChunks = [];
 let activeStream = null;
 
+let debugTaps = 0;
+let debugTapTimer = null;
+
+function revealDebug() {
+  debugTaps++;
+  clearTimeout(debugTapTimer);
+  debugTapTimer = setTimeout(() => { debugTaps = 0; }, 1000);
+  if (debugTaps >= 3) {
+    debugTaps = 0;
+    const d = document.getElementById('debug-drawer');
+    d.style.display = d.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
 function debug(msg) {
-  const box = document.getElementById('debug-box');
+  const box = document.getElementById('debug-drawer');
   if (box) {
-    box.innerHTML += '<br>' + msg;
+    if (box.innerHTML === 'Debug info will appear here...') box.innerHTML = '';
+    box.innerHTML += msg + '<br>';
     box.scrollTop = box.scrollHeight;
   }
   console.log(msg);
@@ -759,7 +809,8 @@ async function processAudio() {
     }
 
     showResult(cleaned, 0.85);
-    speakResult();
+    // No auto-speak: iOS Safari blocks speech after an async call.
+    // The 🔊 button (shown by showResult) speaks on a direct tap, which iOS always allows.
 
   } catch(e) {
     debug('ERROR: ' + e.message);
@@ -912,6 +963,9 @@ function showResult(text, confidence) {
   document.getElementById('result-card').classList.add('has-result');
   document.getElementById('result-card').classList.remove('has-error');
 
+  // Show the 🔊 button right away so the listener can tap to hear the words.
+  document.getElementById('speak-again-btn').style.display = '';
+
   // Show thumbs with auto-dismiss
   showThumbs();
 }
@@ -932,7 +986,7 @@ function showNoMatch() {
 
 function showThumbs() {
   document.getElementById('thumbs-row').classList.add('visible');
-  document.getElementById('speak-again-btn').style.display = 'none';
+  // Leave the 🔊 button visible so it's tappable the whole time.
   clearThumbsTimer();
   thumbsTimer = setTimeout(() => {
     hideThumbs();
@@ -966,19 +1020,17 @@ function thumbsDown() {
 function speakResult() {
   if (!lastResult) return;
   speechSynthesis.cancel();
-  setTimeout(() => {
-    const utt = new SpeechSynthesisUtterance(lastResult);
-    utt.rate = 0.85;
-    utt.pitch = 1;
-    utt.volume = 1;
-    utt.lang = 'en-US';
-    // iOS Safari fix — select a specific voice
-    const voices = speechSynthesis.getVoices();
-    const enVoice = voices.find(v => v.lang.startsWith('en'));
-    if (enVoice) utt.voice = enVoice;
-    utt.onerror = (e) => debug('Speech error: ' + e.error);
-    speechSynthesis.speak(utt);
-  }, 500);
+  // Fire synchronously inside the tap handler — iOS Safari requires this.
+  const utt = new SpeechSynthesisUtterance(lastResult);
+  utt.rate = 0.85;
+  utt.pitch = 1;
+  utt.volume = 1;
+  utt.lang = 'en-US';
+  const voices = speechSynthesis.getVoices();
+  const enVoice = voices.find(v => v.lang.startsWith('en'));
+  if (enVoice) utt.voice = enVoice;
+  utt.onerror = (e) => debug('Speech error: ' + e.error);
+  speechSynthesis.speak(utt);
 }
 
 function askRepeat() {
@@ -1010,4 +1062,3 @@ renderConnectionStatus();
 </script>
 </body>
 </html>
-
