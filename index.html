@@ -549,6 +549,22 @@ let thumbsTimer = null;
 const THUMBS_TIMEOUT = 15000;
 
 // Carolyn's world context for Claude
+const VOCABULARY = [
+  "Alex","Anthony","Artist in All","Barbie Mermaid","Bergen","Blackhawks","Bob",
+  "Bob and Connie in Florida","Bob and Connie's house","Bobby","Bobby's house",
+  "Bobby's house tomorrow","Britt","Britt's wedding","Chicago","Christmas","Coke",
+  "Connie","Cooper","Dad","Emma","Family Fest","I don't want to","I like McDonald's",
+  "I like pizza","I love Britt","I'm fine","I'm scared","Jennie","Joanie","Joe","Katie",
+  "Katie's house","Katie's house next weekend","Little Bobby","Little Bobby's getting married",
+  "Lucky","Misericordia","Mom","Nick","Oakley","Payton","Payton's birthday","Rick","Tusker",
+  "airplane","airplane trip","birthday party","breakfast","breakfast time","burger","coffee",
+  "dinner","dinnertime","going to McDonald's","hamburger","happy","hungry","in the car","juice",
+  "lasagna","lunch","lunchtime","mermaid","milk","my birthday","my knee hurts","next week",
+  "next weekend","nighttime","pizza","restaurant","sad","scrambled eggs","sleeping over",
+  "spaghetti","thirsty","this week","tired","today","tomorrow","tomorrow morning",
+  "watch a movie","water","wedding","wheelchair","yesterday"
+].join("\n");
+
 const CAROLYN_CONTEXT = `You are helping translate Carolyn Soudan's speech. Carolyn has Down syndrome and her speech is slurred and often fragmented. She drops grammatical scaffolding and leads with the most important words.
 
 CAROLYN'S WORLD:
@@ -573,23 +589,31 @@ SPEECH PATTERNS:
 - She may say partial words or slur sounds together
 
 YOUR JOB:
-You are a speech clarifier for Carolyn Soudan. Azure speech recognition has attempted to transcribe her slurred speech. Your job is to output the clearest, most accurate word-for-word version of exactly what she said — nothing more, nothing less.
+Azure speech recognition tried to transcribe Carolyn's slurred speech and often gets it wrong, returning ordinary English words that sound vaguely similar to what she said (e.g. it hears "Walmart" when she said "Blackhawks", or "Taco" when she said "Tusker"). You will be given Azure's top few guesses. Your job is to figure out which item from CAROLYN'S KNOWN PHRASES she most likely said, using the sound of Azure's guesses as clues.
+
+CAROLYN'S KNOWN PHRASES (she almost always says one of these):
+${VOCABULARY}
+
+HOW TO DECIDE:
+- Compare Azure's guesses (by sound) to the known phrases. Pick the known phrase that best matches the sound, even if Azure's word is not itself on the list. Example: Azure heard "Walmart" → closest known phrase by sound is "Blackhawks"? Only if plausible; otherwise judge by the sounds given.
+- If one of Azure's guesses already IS a known phrase (or contains it, like "Katie's house weekend" for "Katie's house next weekend"), return that known phrase.
+- Prefer the known phrase whose sounds line up with Azure's guesses. Use the family/context knowledge above to break ties (e.g. names of her actual people and pets).
+- If none of the known phrases is a plausible match to the sounds, output: UNCLEAR. Do not invent a phrase that isn't on the list.
 
 RULES:
-- Output ONLY the words she actually said, cleaned up and spelled correctly
-- Do NOT add any words she did not say
-- Do NOT complete sentences or add context
-- Do NOT make assumptions about what she meant
-- Fix spelling, clean up garbled words, use the correct names from her vocabulary
-- If completely unclear, output: UNCLEAR
+- Output must be EXACTLY one of the known phrases above, copied verbatim, OR the single word UNCLEAR.
+- Do NOT output any word or phrase that is not on the known list.
+- Do NOT add words, verbs, or context. Do NOT explain.
 
 Examples:
-- Azure heard "little bah ee" → output: "Little Bobby"
-- Azure heard "kay tees house nex wee end" → output: "Katie's house next weekend"
-- Azure heard "birt day" → output: "birthday"
-- Azure heard "mizer kordia" → output: "Misericordia"
-- Azure heard "i wanna pizza" → output: "I want pizza"
-- Azure heard "britt weddin" → output: "Britt's wedding"
+- Azure guesses: "Walmart" → output: Blackhawks
+- Azure guesses: "Taco" / "Jackie" → output: UNCLEAR (could be Chicago or Tusker; if unsure between known phrases, and context doesn't decide, prefer UNCLEAR over a wrong guess)
+- Azure guesses: "Katie's house weekend" / "Katie's house. Weekend." → output: Katie's house next weekend
+- Azure guesses: "McDonald's" (when she may mean her home) → output: Misericordia only if the sounds fit; else UNCLEAR
+- Azure guesses: "Freddie Mercury" → output: UNCLEAR unless a known phrase clearly matches the sound
+- Azure guesses: "I like Britt" → output: I love Britt (closest known phrase)
+- Azure guesses: "Scared." → output: I'm scared
+- Azure guesses: "Knee hurts." → output: my knee hurts
 
 The person listening will understand the full meaning. Your only job is to make her words clear.
 
@@ -803,7 +827,7 @@ async function processAudio() {
       return;
     }
 
-    const cleaned = await sendToClaude(rawTranscript);
+    const cleaned = await sendToClaude(rawTranscript, azureResult.candidates);
     debug('Claude said: ' + (cleaned || '(empty)'));
 
     if (!cleaned || cleaned === 'UNCLEAR') {
@@ -875,13 +899,18 @@ async function sendToAzure(wavBlob) {
     const best = data.NBest[0];
     const conf = typeof best.Confidence === 'number' ? best.Confidence : null;
     debug('Azure confidence: ' + (conf !== null ? Math.round(conf * 100) + '%' : 'n/a'));
-    return { text: best.Display, confidence: conf };
+    const candidates = data.NBest.slice(0, 3).map(n => n.Display).filter(Boolean);
+    debug('Azure candidates: ' + candidates.join(' | '));
+    return { text: best.Display, confidence: conf, candidates };
   }
-  return { text: '', confidence: null };
+  return { text: '', confidence: null, candidates: [] };
 }
-async function sendToClaude(rawText) {
+async function sendToClaude(rawText, candidates) {
   const proxyUrl = 'https://carolyn-proxy.soudan10.workers.dev';
-  
+
+  const list = (candidates && candidates.length ? candidates : [rawText])
+    .map((c, i) => `${i + 1}. "${c}"`).join('\n');
+
   const response = await fetch(proxyUrl, {
     method: 'POST',
     headers: {
@@ -889,9 +918,9 @@ async function sendToClaude(rawText) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 150,
+      max_tokens: 60,
       system: CAROLYN_CONTEXT,
-      messages: [{ role: 'user', content: `Azure Custom Speech heard: "${rawText}"\n\nWhat did Carolyn mean to say?` }]
+      messages: [{ role: 'user', content: `Azure's top guesses (best first):\n${list}\n\nWhich single phrase from Carolyn's known phrases did she most likely say? Reply with exactly one known phrase, or UNCLEAR.` }]
     })
   });
 
