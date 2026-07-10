@@ -8,10 +8,10 @@
 <style>
   :root{
     --bg:#101820; --panel:#182430; --ink:#f2f6f8; --muted:#8aa0b0; --line:#26333f;
-    --go:#3ec38b; --save:#4a9fd4; --redo:#c9743e; --warn:#d0574e;
+    --go:#e5544b; --live:#e5544b; --save:#3ec38b; --redo:#c9743e; --play:#4a9fd4; --warn:#d0574e;
     --disp:"Georgia","Times New Roman",serif;
   }
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
   html,body{height:100%;}
   body{background:var(--bg);color:var(--ink);
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -19,48 +19,53 @@
     padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);}
 
   #setup{padding:24px 22px;overflow-y:auto;flex:1;}
-  #setup h1{font-family:var(--disp);font-size:26px;font-weight:600;letter-spacing:-.01em;}
+  #setup h1{font-family:var(--disp);font-size:26px;font-weight:600;}
   #setup p.sub{color:var(--muted);font-size:14px;margin-top:6px;line-height:1.5;}
   .field{margin-top:20px;}
   label{display:block;font-size:13px;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em;}
-  textarea{width:100%;min-height:170px;background:var(--panel);border:1px solid var(--line);
+  textarea{width:100%;min-height:160px;background:var(--panel);border:1px solid var(--line);
     border-radius:10px;color:var(--ink);padding:12px 14px;font-size:16px;line-height:1.6;
     font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;}
   .passrow{display:flex;gap:14px;align-items:flex-end;margin-top:20px;}
-  .passrow .field{margin:0;flex:0 0 auto;}
+  .passrow .field{margin:0;}
   input[type=number]{width:110px;background:var(--panel);border:1px solid var(--line);border-radius:8px;
     color:var(--ink);padding:12px 14px;font-size:18px;text-align:center;}
   .passnote{flex:1;font-size:12.5px;color:var(--muted);line-height:1.5;}
   .big-btn{width:100%;border:none;border-radius:12px;padding:17px;font-size:18px;font-weight:650;
-    cursor:pointer;margin-top:26px;color:#08131a;background:var(--go);}
-  .big-btn:disabled{opacity:.4;}
+    cursor:pointer;margin-top:26px;color:#08131a;background:var(--save);}
   .hint{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.55;}
 
   #session{display:none;flex:1;flex-direction:column;}
   .topbar{display:flex;justify-content:space-between;align-items:center;
     padding:12px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);}
-  .rec-dot{display:inline-flex;align-items:center;gap:7px;}
-  .rec-dot i{width:9px;height:9px;border-radius:50%;background:var(--go);animation:pulse 1.4s infinite;}
-  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
   .end-link{color:var(--muted);text-decoration:underline;background:none;border:none;font-size:13px;}
 
   .stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;}
   .say-label{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);}
   .word{font-family:var(--disp);font-weight:600;line-height:1.1;margin:14px 0 6px;
-    font-size:clamp(34px,11vw,60px);letter-spacing:-.01em;}
+    font-size:clamp(36px,12vw,64px);}
   .progress{font-size:15px;color:var(--muted);margin-top:4px;}
-  .lastclip{margin-top:26px;height:22px;font-size:14px;color:var(--go);opacity:0;transition:opacity .25s;}
-  .lastclip.show{opacity:1;}
+  .status{margin-top:20px;height:26px;font-size:16px;font-weight:600;}
+  .status.rec{color:var(--live);}
+  .status.ok{color:var(--save);}
 
-  .controls{padding:14px 18px 22px;display:flex;flex-direction:column;gap:12px;}
-  .save-btn{width:100%;border:none;border-radius:14px;padding:24px;font-size:22px;font-weight:700;
-    color:#07131b;background:var(--save);cursor:pointer;}
-  .save-btn:active{transform:scale(.99);}
-  .undo-btn{width:100%;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:600;
-    background:transparent;color:var(--redo);border:1.5px solid var(--redo);cursor:pointer;}
-  .undo-btn:disabled{opacity:.35;}
+  .controls{padding:14px 18px 26px;display:flex;flex-direction:column;gap:12px;}
+  .hold-btn{width:100%;border:none;border-radius:16px;padding:34px 20px;font-size:22px;font-weight:750;
+    color:#fff;background:var(--go);cursor:pointer;transition:transform .05s, background .12s;
+    box-shadow:0 0 0 0 rgba(229,84,75,.5);}
+  .hold-btn.holding{background:var(--live);transform:scale(.98);animation:glow 1s infinite;}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(229,84,75,.55);}50%{box-shadow:0 0 0 14px rgba(229,84,75,0);}}
+  .hold-btn:disabled{opacity:.4;}
 
-  .banner{text-align:center;font-size:13px;color:var(--muted);padding:0 18px 10px;min-height:18px;}
+  /* review controls appear after a recording */
+  .review{display:none;gap:12px;}
+  .review.show{display:flex;flex-direction:column;}
+  .rev-row{display:flex;gap:12px;}
+  .rev-row button{flex:1;border:none;border-radius:12px;padding:16px;font-size:16px;font-weight:650;cursor:pointer;}
+  .play-btn{background:transparent;color:var(--play);border:1.5px solid var(--play)!important;}
+  .redo-btn{background:transparent;color:var(--redo);border:1.5px solid var(--redo)!important;}
+  .keep-btn{background:var(--save);color:#07131b;}
+  .banner{text-align:center;font-size:13px;color:var(--muted);padding:0 18px 8px;min-height:18px;}
   .banner.warn{color:var(--warn);}
 
   #done{display:none;flex:1;padding:30px 24px;overflow-y:auto;}
@@ -68,73 +73,73 @@
   .tally{margin-top:18px;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
   .tally div{display:flex;justify-content:space-between;padding:11px 14px;font-size:15px;border-bottom:1px solid var(--line);}
   .tally div:last-child{border-bottom:none;}
-  .tally .n{color:var(--go);font-weight:600;font-variant-numeric:tabular-nums;}
+  .tally .n{color:var(--save);font-weight:600;}
+  .undo-btn{width:100%;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:600;
+    background:transparent;color:var(--play);border:1.5px solid var(--play);cursor:pointer;margin-top:12px;}
 </style>
 </head>
 <body>
 
 <div id="setup">
   <h1>Recording session</h1>
-  <p class="sub">One pass through the whole word list — one clip per word. Read the word to Carolyn, let her say it, tap <b>Save &amp; next word</b>. Do another pass later for more takes.</p>
-
+  <p class="sub">Press and HOLD the red button while Carolyn says the word — release when she's done. Then listen to it and keep or redo. Recording is exactly what happens while you hold, so wait for her, however long she takes.</p>
   <div class="field">
     <label>Words to record — one per line</label>
     <textarea id="wordlist" spellcheck="false"></textarea>
   </div>
-
   <div class="passrow">
-    <div class="field">
-      <label>Pass number</label>
-      <input type="number" id="pass" min="1" max="99" value="1">
-    </div>
-    <div class="passnote">Use a new number each session (1, 2, 3…). It goes into every filename and the saved file's name, so passes never overwrite each other.</div>
+    <div class="field"><label>Pass number</label><input type="number" id="pass" min="1" max="99" value="1"></div>
+    <div class="passnote">Use a new number each session (1, 2, 3…). It goes into every filename and the saved file, so passes never overwrite each other.</div>
   </div>
-
   <button class="big-btn" id="start">Allow microphone &amp; begin</button>
-
-  <p class="hint">
-    Say the word, pause a beat, then let her go — so your voice and hers don't overlap.
-    Recording runs the whole time, so a late tap won't cut off the start of what she says.
-    At the end, all clips save in one file — on iPhone tap Save to put it in Files/iCloud, then send it to Bob.
-  </p>
+  <p class="hint">Best practice: say "Carolyn, say ___," THEN press and hold and wait for her. Press only after you've finished speaking, so your voice isn't in the clip. Hold until she's completely finished, then release.</p>
 </div>
 
 <div id="session">
   <div class="topbar">
-    <span class="rec-dot"><i></i> Recording · Pass <span id="passlabel">1</span></span>
+    <span>Pass <span id="passlabel">1</span></span>
     <button class="end-link" id="end">End &amp; save now</button>
   </div>
   <div class="stage">
     <div class="say-label">Say to Carolyn:</div>
     <div class="word" id="word">—</div>
     <div class="progress" id="progress"></div>
-    <div class="lastclip" id="lastclip">Saved ✓</div>
+    <div class="status" id="status"></div>
   </div>
   <div class="banner" id="banner"></div>
   <div class="controls">
-    <button class="save-btn" id="save">Save &amp; next word</button>
-    <button class="undo-btn" id="undo" disabled>Undo last</button>
+    <button class="hold-btn" id="hold">Press &amp; hold to record</button>
+    <div class="review" id="review">
+      <div class="rev-row">
+        <button class="play-btn" id="play">▶ Play it back</button>
+        <button class="redo-btn" id="redo">↻ Redo</button>
+      </div>
+      <button class="keep-btn rev-row" id="keep" style="display:block;">Keep &amp; next word →</button>
+    </div>
   </div>
 </div>
 
 <div id="done">
   <h2>Pass complete</h2>
-  <p class="sub" style="color:var(--muted);margin-top:8px;">All clips save in one file. If the save screen didn't appear, tap the button below. Then start a new session with the next pass number for more takes.</p>
+  <p class="sub" style="color:var(--muted);margin-top:8px;">Your kept clips save in one file. Then start the next pass for more takes.</p>
   <div class="tally" id="tally"></div>
-  <button class="big-btn" id="zipall" style="background:var(--save);color:#07131b;">Save all clips again</button>
-  <p class="hint">Send the saved file to Bob. Filenames include the word and pass number.</p>
+  <button class="big-btn" id="nextpass">Start next pass →</button>
+  <button class="undo-btn" id="zipall">Save this pass's clips again</button>
+  <p class="hint">Send each saved file to Bob. Filenames include the word and pass number.</p>
 </div>
+
+<audio id="player" style="display:none"></audio>
 
 <script>
 const DEFAULT_WORDS = ["Joe","Nick","Rick","Happy","Sad","Bergen","Chicago","Oakley"];
 const $ = id => document.getElementById(id);
 $('wordlist').value = DEFAULT_WORDS.join("\n");
 
-let stream, mediaRecorder, mimeType;
-let chunks = [], headerChunk = null, bufferTrim;
-let words = [], wi = 0, passNum = 1;
-let saved = [];            // {word, name, blob}
-const PREROLL_MS = 1800;
+let stream, mimeType;
+let rec=null, recChunks=[];
+let words=[], wi=0, passNum=1;
+let kept=[];                 // {word,name,blob}
+let pendingBlob=null;        // the just-recorded clip awaiting keep/redo
 
 $('start').addEventListener('click', async () => {
   words = $('wordlist').value.split("\n").map(s=>s.trim()).filter(Boolean);
@@ -143,14 +148,13 @@ $('start').addEventListener('click', async () => {
   try{
     stream = await navigator.mediaDevices.getUserMedia({audio:{
       channelCount:1, echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
-  }catch(e){ alert("Microphone permission is needed. "+e.message); return; }
+  }catch(e){ alert("Microphone permission needed. "+e.message); return; }
   mimeType = pickMime();
-  saved = [];
+  kept=[]; wi=0;
   $('passlabel').textContent = passNum;
   $('setup').style.display='none';
   $('session').style.display='flex';
-  startContinuous();
-  wi = 0; showWord();
+  showWord();
 });
 
 function pickMime(){
@@ -159,97 +163,109 @@ function pickMime(){
   return '';
 }
 
-function startContinuous(){
-  chunks=[]; headerChunk=null;
-  const mr=new MediaRecorder(stream, mimeType?{mimeType}:undefined);
-  mediaRecorder=mr;
-  mr.ondataavailable = e => {
-    if(e.data && e.data.size){
-      if(!headerChunk) headerChunk = e.data;   // first chunk holds the file header — keep forever
-      chunks.push({t:Date.now(), data:e.data});
-    }
-  };
-  mr.start(250);
-  bufferTrim=setInterval(()=>{
-    const cutoff=Date.now()-40000;
-    while(chunks.length>2 && chunks[0].t<cutoff) chunks.shift();
-  },5000);
-}
-
 function showWord(){
   $('word').textContent = words[wi];
   $('progress').textContent = `Word ${wi+1} of ${words.length}`;
-  $('undo').disabled = saved.length===0;
+  $('status').textContent=''; $('status').className='status';
   $('banner').textContent=''; $('banner').className='banner';
+  hideReview();
+  pendingBlob=null;
+  $('hold').style.display='block';
+  $('hold').disabled=false;
 }
 
-$('save').addEventListener('click', () => {
-  const from = Date.now()-PREROLL_MS;
-  const slice = chunks.filter(c=>c.t>=from).map(c=>c.data);
-  if(!slice.length){ flash("Give it a second and try again",true); return; }
-  const parts=[];
-  if(headerChunk && slice[0]!==headerChunk) parts.push(headerChunk);
-  slice.forEach(d=>parts.push(d));
-  const blob=new Blob(parts,{type:mimeType||'audio/webm'});
+// ---- Press & hold recording: a FRESH MediaRecorder per clip = clean start, no stale header ----
+function startRec(){
+  if(rec && rec.state==='recording') return;
+  recChunks=[];
+  rec = new MediaRecorder(stream, mimeType?{mimeType}:undefined);
+  rec.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = () => {
+    pendingBlob = new Blob(recChunks, {type:mimeType||'audio/webm'});
+    $('status').textContent='Recorded — listen before keeping'; $('status').className='status ok';
+    showReview();
+    autoPlay();
+  };
+  rec.start(); // no timeslice → single clean segment with a proper header
+  $('status').textContent='● Recording… release when she\'s done'; $('status').className='status rec';
+  $('hold').classList.add('holding');
+  $('hold').textContent='Recording… release to stop';
+}
+function stopRec(){
+  $('hold').classList.remove('holding');
+  $('hold').textContent='Press & hold to record';
+  if(rec && rec.state==='recording') rec.stop();
+}
+
+const holdBtn = $('hold');
+// touch (iPhone)
+holdBtn.addEventListener('touchstart', e => { e.preventDefault(); startRec(); }, {passive:false});
+holdBtn.addEventListener('touchend',   e => { e.preventDefault(); stopRec(); }, {passive:false});
+holdBtn.addEventListener('touchcancel',e => { e.preventDefault(); stopRec(); }, {passive:false});
+// mouse (desktop testing)
+holdBtn.addEventListener('mousedown', startRec);
+holdBtn.addEventListener('mouseup',   stopRec);
+holdBtn.addEventListener('mouseleave',()=>{ if(rec&&rec.state==='recording') stopRec(); });
+
+function showReview(){ $('review').classList.add('show'); $('hold').style.display='none'; }
+function hideReview(){ $('review').classList.remove('show'); }
+
+function autoPlay(){ setTimeout(playPending, 250); }
+function playPending(){
+  if(!pendingBlob) return;
+  const p=$('player'); p.src=URL.createObjectURL(pendingBlob); p.play().catch(()=>{});
+}
+$('play').addEventListener('click', playPending);
+
+$('redo').addEventListener('click', () => {
+  pendingBlob=null; hideReview();
+  $('hold').style.display='block';
+  $('status').textContent='Redo — press & hold when ready'; $('status').className='status';
+});
+
+$('keep').addEventListener('click', () => {
+  if(!pendingBlob) return;
   const w=words[wi];
   const safe=w.replace(/[^A-Za-z0-9]/g,'');
   const name=`${safe}_p${String(passNum).padStart(2,'0')}.webm`;
-  saved.push({word:w,name,blob});
-  flash("Saved ✓");
+  kept.push({word:w,name,blob:pendingBlob});
   if(wi < words.length-1){ wi++; showWord(); }
-  else { setTimeout(finish, 400); }
-});
-
-$('undo').addEventListener('click', () => {
-  if(!saved.length) return;
-  const last = saved.pop();
-  // go back to that word
-  const idx = words.indexOf(last.word);
-  if(idx>=0) wi=idx;
-  showWord();
-  flash("Removed — redo this word");
+  else finish();
 });
 
 $('end').addEventListener('click', finish);
 
-function flash(msg,warn){
-  const b=$('banner'); b.textContent=msg; b.className=warn?'banner warn':'banner';
-  if(!warn){ const lc=$('lastclip'); lc.classList.add('show'); setTimeout(()=>lc.classList.remove('show'),800); }
-}
+function flash(msg,warn){ const b=$('banner'); b.textContent=msg; b.className=warn?'banner warn':'banner'; }
 
 async function finish(){
-  try{ mediaRecorder && mediaRecorder.state!=='inactive' && mediaRecorder.stop(); }catch(e){}
-  clearInterval(bufferTrim);
+  try{ if(rec&&rec.state==='recording') rec.stop(); }catch(e){}
   try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
   $('session').style.display='none';
   $('done').style.display='block';
   const tally=$('tally'); tally.innerHTML='';
-  if(!saved.length){ tally.innerHTML='<div><span>No clips recorded</span><span class="n">0</span></div>'; return; }
-  saved.forEach(s=>{
-    const d=document.createElement('div');
-    d.innerHTML=`<span>${s.word}</span><span class="n">✓</span>`;
-    tally.appendChild(d);
-  });
+  if(!kept.length){ tally.innerHTML='<div><span>No clips kept</span><span class="n">0</span></div>'; return; }
+  kept.forEach(k=>{ const d=document.createElement('div');
+    d.innerHTML=`<span>${k.word}</span><span class="n">✓</span>`; tally.appendChild(d); });
   await zipEverything();
 }
 
 async function zipEverything(){
-  if(!saved.length){ alert("No clips to save."); return; }
+  if(!kept.length){ alert("No clips to save."); return; }
   const zip=new JSZip();
-  saved.forEach(s=>zip.file(s.name,s.blob));
+  kept.forEach(k=>zip.file(k.name,k.blob));
   const blob=await zip.generateAsync({type:'blob'});
   const stamp=new Date().toISOString().slice(0,10);
   triggerDownload(blob, `Carolyn_Pass${String(passNum).padStart(2,'0')}_${stamp}.zip`);
 }
-
 function triggerDownload(blob,filename){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=filename;
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
-
 $('zipall').addEventListener('click', zipEverything);
+$('nextpass').addEventListener('click', ()=>{
+  $('pass').value=passNum+1; kept=[]; $('done').style.display='none'; $('setup').style.display='block';
+});
 
 let wakeLock=null;
 async function keepAwake(){ try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
