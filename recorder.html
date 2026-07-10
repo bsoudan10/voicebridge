@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Carolyn — Recording Session</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#101820;          /* deep slate */
+    --panel:#182430;
+    --ink:#f2f6f8;
+    --muted:#8aa0b0;
+    --line:#26333f;
+    --go:#3ec38b;          /* recording-live green */
+    --save:#4a9fd4;        /* save blue */
+    --redo:#c9743e;        /* redo amber */
+    --warn:#d0574e;
+    --disp: "Georgia", "Times New Roman", serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+
+  /* ---------- Setup screen ---------- */
+  #setup{ padding:24px 22px; overflow-y:auto; flex:1; }
+  #setup h1{ font-family:var(--disp); font-size:26px; font-weight:600; letter-spacing:-.01em; }
+  #setup p.sub{ color:var(--muted); font-size:14px; margin-top:6px; line-height:1.5; }
+  .field{ margin-top:20px; }
+  label{ display:block; font-size:13px; color:var(--muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:.06em; }
+  textarea{
+    width:100%; min-height:190px; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; color:var(--ink); padding:12px 14px; font-size:16px; line-height:1.6;
+    font-family:ui-monospace,Menlo,Consolas,monospace; resize:vertical;
+  }
+  .row{ display:flex; gap:12px; align-items:center; margin-top:18px; }
+  .row label{ margin:0; }
+  select{
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    color:var(--ink); padding:10px 12px; font-size:16px;
+  }
+  .big-btn{
+    width:100%; border:none; border-radius:12px; padding:17px; font-size:18px; font-weight:650;
+    cursor:pointer; margin-top:26px; color:#08131a; background:var(--go);
+  }
+  .big-btn:disabled{ opacity:.4; }
+  .hint{ font-size:12.5px; color:var(--muted); margin-top:14px; line-height:1.55; }
+
+  /* ---------- Session screen ---------- */
+  #session{ display:none; flex:1; flex-direction:column; }
+  .topbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 18px; border-bottom:1px solid var(--line); font-size:13px; color:var(--muted);
+  }
+  .rec-dot{ display:inline-flex; align-items:center; gap:7px; }
+  .rec-dot i{ width:9px; height:9px; border-radius:50%; background:var(--go); animation:pulse 1.4s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .end-link{ color:var(--muted); text-decoration:underline; background:none; border:none; font-size:13px; }
+
+  .stage{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center; }
+  .say-label{ font-size:13px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+  .word{
+    font-family:var(--disp); font-weight:600; line-height:1.1; margin:14px 0 6px;
+    font-size:clamp(34px,11vw,60px); letter-spacing:-.01em;
+  }
+  .takecount{ font-size:15px; color:var(--muted); margin-top:4px; }
+  .lastclip{ margin-top:26px; height:22px; font-size:14px; color:var(--go); opacity:0; transition:opacity .25s; }
+  .lastclip.show{ opacity:1; }
+
+  .controls{ padding:14px 18px 22px; display:flex; flex-direction:column; gap:12px; }
+  .save-btn{
+    width:100%; border:none; border-radius:14px; padding:22px; font-size:21px; font-weight:700;
+    color:#07131b; background:var(--save); cursor:pointer;
+  }
+  .save-btn:active{ transform:scale(.99); }
+  .subrow{ display:flex; gap:12px; }
+  .subrow button{
+    flex:1; border:none; border-radius:12px; padding:15px; font-size:15px; font-weight:600; cursor:pointer;
+  }
+  .redo-btn{ background:transparent; color:var(--redo); border:1.5px solid var(--redo)!important; }
+  .next-btn{ background:transparent; color:var(--ink); border:1.5px solid var(--line)!important; }
+  .redo-btn:disabled{ opacity:.35; }
+
+  .banner{ text-align:center; font-size:13px; color:var(--muted); padding:0 18px 10px; min-height:18px; }
+  .banner.warn{ color:var(--warn); }
+
+  /* ---------- Done screen ---------- */
+  #done{ display:none; flex:1; padding:30px 24px; overflow-y:auto; }
+  #done h2{ font-family:var(--disp); font-size:24px; font-weight:600; }
+  .tally{ margin-top:18px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .tally div{ display:flex; justify-content:space-between; padding:11px 14px; font-size:15px; border-bottom:1px solid var(--line); }
+  .tally div:last-child{ border-bottom:none; }
+  .tally .n{ color:var(--go); font-weight:600; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<div id="setup">
+  <h1>Recording session</h1>
+  <p class="sub">The screen shows a word. Read it to Carolyn, let her say it, then tap <b>Save clip</b>. Recording runs the whole time, so the start of what she says is never cut off — a late tap is fine.</p>
+
+  <div class="field">
+    <label>Words to record — one per line</label>
+    <textarea id="wordlist" spellcheck="false"></textarea>
+  </div>
+
+  <div class="row">
+    <label for="target">Takes per word</label>
+    <select id="target">
+      <option>5</option><option>6</option><option>7</option><option selected>8</option>
+      <option>9</option><option>10</option><option>12</option>
+    </select>
+    <span class="hint" style="margin:0;">You can change this per word during the session.</span>
+  </div>
+
+  <button class="big-btn" id="start">Allow microphone & begin</button>
+
+  <p class="hint">
+    Tips for good clips: say the word, pause a beat, then let her go — so your voice and hers don't overlap.
+    After each word finishes, the clips download to your phone automatically as a small zip, so nothing is lost if the app closes.
+    Best results in a quiet room, phone held a foot or so from her.
+  </p>
+</div>
+
+<!-- ============ SESSION ============ -->
+<div id="session">
+  <div class="topbar">
+    <span class="rec-dot"><i></i> Recording</span>
+    <button class="end-link" id="end">End session</button>
+  </div>
+
+  <div class="stage">
+    <div class="say-label">Say to Carolyn:</div>
+    <div class="word" id="word">—</div>
+    <div class="takecount" id="takecount"></div>
+    <div class="lastclip" id="lastclip">Saved ✓</div>
+  </div>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="controls">
+    <button class="save-btn" id="save">Save clip</button>
+    <div class="subrow">
+      <button class="redo-btn" id="redo" disabled>Undo last</button>
+      <button class="next-btn" id="next">Next word →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DONE ============ -->
+<div id="done">
+  <h2>Session complete</h2>
+  <p class="sub" style="color:var(--muted);margin-top:8px;">Each word's clips already downloaded during the session. If any download was blocked, use the button below to get everything again.</p>
+  <div class="tally" id="tally"></div>
+  <button class="big-btn" id="zipall" style="background:var(--save);color:#07131b;">Download all clips again</button>
+  <p class="hint">Send the downloaded zip file(s) to Bob. Filenames already include the word and take number.</p>
+</div>
+
+<script>
+const DEFAULT_WORDS = [
+  "Joe","Nick","Rick","Happy","Sad","Bergen","Chicago","Oakley"
+];
+
+const $ = id => document.getElementById(id);
+$('wordlist').value = DEFAULT_WORDS.join("\n");
+
+let stream, mediaRecorder, mimeType;
+let chunks = [];              // rolling audio chunks (continuous)
+let recStartTime = 0;         // ms timestamp when current MediaRecorder segment started
+let words = [], wi = 0;       // word list + index
+let target = 8;
+let takes = {};               // word -> array of {blob, name}
+let session2Tag = "s2";       // session tag to avoid clashing with earlier files
+let sessionActiveWordCount = {}; // per-word current count (for naming)
+
+// ---- Start ----
+$('start').addEventListener('click', async () => {
+  words = $('wordlist').value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!words.length){ alert("Add at least one word."); return; }
+  target = parseInt($('target').value,10);
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      channelCount:1, echoCancellation:true, noiseSuppression:true, autoGainControl:true
+    }});
+  }catch(e){ alert("Microphone permission is needed to record. "+e.message); return; }
+
+  mimeType = pickMime();
+  words.forEach(w => { takes[w]=[]; sessionActiveWordCount[w]=0; });
+
+  $('setup').style.display='none';
+  $('session').style.display='flex';
+  startContinuous();
+  wi = 0; showWord();
+});
+
+function pickMime(){
+  const opts = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/aac'];
+  for(const o of opts){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(o)) return o; }
+  return '';
+}
+
+// Continuous recording: we keep a rolling buffer of recent audio so the
+// beginning of each utterance is captured even if Save is tapped late.
+function startContinuous(){
+  chunks = [];
+  const mr = new MediaRecorder(stream, mimeType?{mimeType}:undefined);
+  mediaRecorder = mr;
+  recStartTime = Date.now();
+  mr.ondataavailable = e => { if(e.data && e.data.size) chunks.push({t:Date.now(), data:e.data}); };
+  mr.start(250); // emit a chunk every 250ms → fine-grained rolling buffer
+  // Recycle the buffer periodically so memory stays bounded (~ last 40s kept)
+  bufferTrim = setInterval(()=>{
+    const cutoff = Date.now()-40000;
+    while(chunks.length>2 && chunks[0].t < cutoff) chunks.shift();
+  }, 5000);
+}
+let bufferTrim;
+
+// PRE-ROLL: when saving, include ~1.8s of audio before the tap.
+const PREROLL_MS = 1800;
+let markStart = null;
+
+function showWord(){
+  const w = words[wi];
+  $('word').textContent = w;
+  updateCount();
+  $('redo').disabled = takes[w].length===0;
+  $('banner').textContent='';
+  $('banner').className='banner';
+  // mark the "start" reference as now minus preroll each time we land on a word
+  markStart = Date.now();
+}
+
+function updateCount(){
+  const w = words[wi];
+  const n = takes[w].length;
+  $('takecount').textContent = `Take ${n} of ${target}  ·  word ${wi+1} of ${words.length}`;
+}
+
+// ---- Save a clip ----
+$('save').addEventListener('click', async () => {
+  const tapTime = Date.now();
+  const from = tapTime - PREROLL_MS;
+  // gather chunks from (tap - preroll) up to now
+  const slice = chunks.filter(c => c.t >= from).map(c => c.data);
+  if(!slice.length){
+    flash("Give it a second and try again", true);
+    return;
+  }
+  const blob = new Blob(slice, {type: mimeType||'audio/webm'});
+  const w = words[wi];
+  const n = takes[w].length + 1;
+  const safe = w.replace(/[^A-Za-z0-9]/g,'');
+  const name = `${safe}_${session2Tag}_${String(n).padStart(2,'0')}.webm`;
+  takes[w].push({ blob, name });
+  updateCount();
+  $('redo').disabled = false;
+  flash("Saved ✓");
+  // auto-advance when target reached
+  if(takes[w].length >= target){
+    flash("Got enough — moving on ✓");
+    setTimeout(()=>saveWordAndAdvance(), 500);
+  }
+});
+
+$('redo').addEventListener('click', () => {
+  const w = words[wi];
+  if(takes[w].length){
+    takes[w].pop();
+    updateCount();
+    $('redo').disabled = takes[w].length===0;
+    flash("Removed last take");
+  }
+});
+
+$('next').addEventListener('click', saveWordAndAdvance);
+
+async function saveWordAndAdvance(){
+  const w = words[wi];
+  if(takes[w].length){ await downloadWordZip(w); }
+  if(wi < words.length-1){ wi++; showWord(); }
+  else { finish(); }
+}
+
+function flash(msg, warn){
+  const b=$('banner'); b.textContent=msg; b.className = warn?'banner warn':'banner';
+  const lc=$('lastclip'); if(!warn){ lc.classList.add('show'); setTimeout(()=>lc.classList.remove('show'),900); }
+}
+
+// ---- Per-word zip download (so a crash costs at most one word) ----
+async function downloadWordZip(w){
+  try{
+    const zip = new JSZip();
+    takes[w].forEach(t => zip.file(t.name, t.blob));
+    const blob = await zip.generateAsync({type:'blob'});
+    triggerDownload(blob, `Carolyn_${w.replace(/[^A-Za-z0-9]/g,'')}_${session2Tag}.zip`);
+  }catch(e){ flash("Download issue — will retry at end", true); }
+}
+
+function triggerDownload(blob, filename){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+
+// ---- End / finish ----
+$('end').addEventListener('click', async () => {
+  const w = words[wi];
+  if(takes[w] && takes[w].length){ await downloadWordZip(w); }
+  finish();
+});
+
+async function finish(){
+  try{ mediaRecorder && mediaRecorder.state!=='inactive' && mediaRecorder.stop(); }catch(e){}
+  clearInterval(bufferTrim);
+  try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  $('session').style.display='none';
+  $('done').style.display='block';
+  const tally=$('tally'); tally.innerHTML='';
+  let any=false;
+  words.forEach(w=>{
+    const n=takes[w].length; if(n) any=true;
+    const d=document.createElement('div');
+    d.innerHTML=`<span>${w}</span><span class="n">${n} clip${n===1?'':'s'}</span>`;
+    tally.appendChild(d);
+  });
+  if(!any){ tally.innerHTML='<div><span>No clips recorded</span><span class="n">0</span></div>'; }
+}
+
+$('zipall').addEventListener('click', async () => {
+  const zip=new JSZip(); let count=0;
+  for(const w of words){ takes[w].forEach(t=>{ zip.file(t.name,t.blob); count++; }); }
+  if(!count){ alert("No clips to download."); return; }
+  const blob=await zip.generateAsync({type:'blob'});
+  triggerDownload(blob, `Carolyn_AllClips_${session2Tag}.zip`);
+});
+
+// Keep screen awake best-effort
+let wakeLock=null;
+async function keepAwake(){ try{ wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
+keepAwake();
+</script>
+</body>
+</html>
