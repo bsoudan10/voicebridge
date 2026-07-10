@@ -123,7 +123,7 @@
 
   <p class="hint">
     Tips for good clips: say the word, pause a beat, then let her go — so your voice and hers don't overlap.
-    After each word finishes, the clips download to your phone automatically as a small zip, so nothing is lost if the app closes.
+    When you finish, all the clips save in one file. On iPhone, tap Save to put it in iCloud Drive or Files, then send that one file to Bob.
     Best results in a quiet room, phone held a foot or so from her.
   </p>
 </div>
@@ -156,7 +156,7 @@
 <!-- ============ DONE ============ -->
 <div id="done">
   <h2>Session complete</h2>
-  <p class="sub" style="color:var(--muted);margin-top:8px;">Each word's clips already downloaded during the session. If any download was blocked, use the button below to get everything again.</p>
+  <p class="sub" style="color:var(--muted);margin-top:8px;">All clips are saving in one file now. If the save screen didn't appear, tap the button below.</p>
   <div class="tally" id="tally"></div>
   <button class="big-btn" id="zipall" style="background:var(--save);color:#07131b;">Download all clips again</button>
   <p class="hint">Send the downloaded zip file(s) to Bob. Filenames already include the word and take number.</p>
@@ -283,7 +283,7 @@ $('next').addEventListener('click', saveWordAndAdvance);
 
 async function saveWordAndAdvance(){
   const w = words[wi];
-  if(takes[w].length){ await downloadWordZip(w); }
+  // Clips are held in memory and downloaded once at the end (smoother on iPhone).
   if(wi < words.length-1){ wi++; showWord(); }
   else { finish(); }
 }
@@ -312,8 +312,6 @@ function triggerDownload(blob, filename){
 
 // ---- End / finish ----
 $('end').addEventListener('click', async () => {
-  const w = words[wi];
-  if(takes[w] && takes[w].length){ await downloadWordZip(w); }
   finish();
 });
 
@@ -324,22 +322,30 @@ async function finish(){
   $('session').style.display='none';
   $('done').style.display='block';
   const tally=$('tally'); tally.innerHTML='';
-  let any=false;
+  let any=false, total=0;
   words.forEach(w=>{
-    const n=takes[w].length; if(n) any=true;
+    const n=takes[w].length; if(n){any=true; total+=n;}
     const d=document.createElement('div');
     d.innerHTML=`<span>${w}</span><span class="n">${n} clip${n===1?'':'s'}</span>`;
     tally.appendChild(d);
   });
   if(!any){ tally.innerHTML='<div><span>No clips recorded</span><span class="n">0</span></div>'; }
+  // Build the single zip and hand it to the phone once.
+  if(any){ await zipEverything(); }
+}
+
+async function zipEverything(){
+  const zip=new JSZip(); let count=0;
+  for(const w of words){ takes[w].forEach(t=>{ zip.file(t.name,t.blob); count++; }); }
+  if(!count) return;
+  const blob=await zip.generateAsync({type:'blob'});
+  triggerDownload(blob, `Carolyn_AllClips_${session2Tag}.zip`);
 }
 
 $('zipall').addEventListener('click', async () => {
-  const zip=new JSZip(); let count=0;
-  for(const w of words){ takes[w].forEach(t=>{ zip.file(t.name,t.blob); count++; }); }
+  let count=0; words.forEach(w=>count+=takes[w].length);
   if(!count){ alert("No clips to download."); return; }
-  const blob=await zip.generateAsync({type:'blob'});
-  triggerDownload(blob, `Carolyn_AllClips_${session2Tag}.zip`);
+  await zipEverything();
 });
 
 // Keep screen awake best-effort
