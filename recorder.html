@@ -146,6 +146,7 @@ let kept=[];                 // {word,name,blob}
 let pendingBlob=null;        // the just-recorded clip awaiting keep/redo
 let recStart=0;              // ms timestamp when current recording began
 let audioLive=false;         // true once real audio chunks start flowing
+let liveTimer=null;          // fallback timer to mark recording live
 
 $('start').addEventListener('click', async () => {
   words = $('wordlist').value.split("\n").map(s=>s.trim()).filter(Boolean);
@@ -196,21 +197,15 @@ function startRec(){
   rec.ondataavailable = e => {
     if(e.data && e.data.size){
       recChunks.push(e.data);
-      if(!audioLive){                // first real audio → NOW it's truly recording
-        audioLive = true;
-        recStart = Date.now();
-        $('status').textContent='● Recording — release when she\'s done'; $('status').className='status rec';
-        $('hold').classList.remove('starting'); $('hold').classList.add('holding');
-        $('hold').textContent='● Recording… release to stop';
-      }
+      if(!audioLive) markLive();
     }
   };
   rec.onstop = () => {
     const held = audioLive ? (Date.now()-recStart) : 0;
     const size = recChunks.reduce((s,c)=>s+c.size,0);
-    if(!audioLive || held < 300 || size < 800){
+    if(size < 800){
       pendingBlob=null;
-      $('status').textContent='Didn\'t catch it — hold until the button turns RED, then let her speak';
+      $('status').textContent='Didn\'t catch it — hold until RED, then let her speak';
       $('status').className='status warn2';
       $('hold').style.display='block';
       hideReview();
@@ -220,13 +215,27 @@ function startRec(){
     $('status').textContent='Got it — tap ▶ Play to check'; $('status').className='status ok';
     showReview();
   };
-  // timeslice of 100ms so the FIRST chunk (and thus the "live" signal) arrives quickly
+  // timeslice so chunks arrive during the hold
   rec.start(100);
   $('status').textContent='Starting…'; $('status').className='status';
   $('hold').classList.add('starting');
   $('hold').textContent='Starting… keep holding';
+  // Reliable fallback: go RED after a short fixed delay even if the first
+  // audio-chunk event is slow to fire on this device.
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(()=>{ if(!audioLive && rec && rec.state==='recording') markLive(); }, 350);
+}
+
+function markLive(){
+  if(audioLive) return;
+  audioLive = true;
+  recStart = Date.now();
+  $('status').textContent='● Recording — release when she\'s done'; $('status').className='status rec';
+  $('hold').classList.remove('starting'); $('hold').classList.add('holding');
+  $('hold').textContent='● Recording… release to stop';
 }
 function stopRec(){
+  clearTimeout(liveTimer);
   $('hold').classList.remove('holding','starting');
   $('hold').textContent='Press & hold to record';
   if(rec && rec.state==='recording') rec.stop();
