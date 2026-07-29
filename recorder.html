@@ -54,17 +54,21 @@
     color:#fff;background:var(--go);cursor:pointer;transition:transform .05s, background .12s;
     box-shadow:0 0 0 0 rgba(229,84,75,.5);}
   .hold-btn.holding{background:var(--live);transform:scale(.98);animation:glow 1s infinite;}
+  .hold-btn.starting{background:#c98a3e;}
   @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(229,84,75,.55);}50%{box-shadow:0 0 0 14px rgba(229,84,75,0);}}
   .hold-btn:disabled{opacity:.4;}
+  .status.warn2{color:#e5a34b;font-weight:700;}
 
   /* review controls appear after a recording */
-  .review{display:none;gap:12px;}
-  .review.show{display:flex;flex-direction:column;}
+  .review{display:none;}
+  .review.show{display:flex;flex-direction:column;gap:14px;}
   .rev-row{display:flex;gap:12px;}
-  .rev-row button{flex:1;border:none;border-radius:12px;padding:16px;font-size:16px;font-weight:650;cursor:pointer;}
-  .play-btn{background:transparent;color:var(--play);border:1.5px solid var(--play)!important;}
-  .redo-btn{background:transparent;color:var(--redo);border:1.5px solid var(--redo)!important;}
-  .keep-btn{background:var(--save);color:#07131b;}
+  .rev-row button{flex:1;border:none;border-radius:12px;padding:20px 14px;font-size:17px;font-weight:650;cursor:pointer;}
+  .play-btn{background:transparent;color:var(--play);border:2px solid var(--play)!important;}
+  .redo-btn{background:transparent;color:var(--redo);border:2px solid var(--redo)!important;}
+  .keep-btn{width:100%;border:none;border-radius:16px;padding:26px 20px;font-size:22px;font-weight:750;
+    background:var(--save);color:#07131b;cursor:pointer;}
+  .keep-btn:active{transform:scale(.99);}
   .banner{text-align:center;font-size:13px;color:var(--muted);padding:0 18px 8px;min-height:18px;}
   .banner.warn{color:var(--warn);}
 
@@ -111,10 +115,10 @@
     <button class="hold-btn" id="hold">Press &amp; hold to record</button>
     <div class="review" id="review">
       <div class="rev-row">
-        <button class="play-btn" id="play">▶ Play it back</button>
+        <button class="play-btn" id="play">▶ Play</button>
         <button class="redo-btn" id="redo">↻ Redo</button>
       </div>
-      <button class="keep-btn rev-row" id="keep" style="display:block;">Keep &amp; next word →</button>
+      <button class="keep-btn" id="keep">Keep &amp; next word →</button>
     </div>
   </div>
 </div>
@@ -128,7 +132,7 @@
   <p class="hint">Send each saved file to Bob. Filenames include the word and pass number.</p>
 </div>
 
-<audio id="player" style="display:none"></audio>
+<audio id="player" controls playsinline style="width:calc(100% - 36px);margin:8px 18px;display:none"></audio>
 
 <script>
 const DEFAULT_WORDS = ["Alex", "Anthony", "Bob", "Bobby", "Little Bobby", "Britt", "Connie", "Dad", "Emma", "Jennie", "Joanie", "Joe", "Katie", "Mom", "Nick", "Payton", "Rick", "my Q", "Cooper", "Lucky", "Oakley", "Tusker", "Bergen", "Chicago", "Misericordia", "Kaperl", "Bob and Connie's house", "Bobby's house", "Katie's house", "restaurant", "Wendy's", "IHOP", "bakery", "Red Robin", "greenhouse", "hole in the wall", "swimming pool", "breakfast", "burger", "coffee", "Coke", "dinner", "hamburger", "juice", "lasagna", "lunch", "milk", "pizza", "scrambled eggs", "spaghetti", "water", "over easy", "happy", "sad", "hungry", "thirsty", "tired", "I'm fine", "I'm scared", "I don't want to", "my knee hurts", "wheelchair", "stop that", "my purse", "it's mine", "shower", "I can't sleep", "airplane trip", "birthday party", "Britt's wedding", "Christmas", "Family Fest", "going to McDonald's", "sleeping over", "watch a movie", "wedding", "Little Bobby's getting married", "Payton's birthday", "my birthday", "bingo", "art", "no work", "today", "tomorrow", "tomorrow morning", "tonight", "yesterday", "this week", "next week", "next weekend", "breakfast time", "lunchtime", "dinnertime", "I like pizza", "I like McDonald's", "I love Britt", "it's good", "I like that", "my dad"];
@@ -140,6 +144,8 @@ let rec=null, recChunks=[];
 let words=[], wi=0, passNum=1;
 let kept=[];                 // {word,name,blob}
 let pendingBlob=null;        // the just-recorded clip awaiting keep/redo
+let recStart=0;              // ms timestamp when current recording began
+let audioLive=false;         // true once real audio chunks start flowing
 
 $('start').addEventListener('click', async () => {
   words = $('wordlist').value.split("\n").map(s=>s.trim()).filter(Boolean);
@@ -178,21 +184,50 @@ function showWord(){
 function startRec(){
   if(rec && rec.state==='recording') return;
   recChunks=[];
+  recStart = 0;                 // set when audio actually starts flowing
+  audioLive = false;
   rec = new MediaRecorder(stream, mimeType?{mimeType}:undefined);
-  rec.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
-  rec.onstop = () => {
-    pendingBlob = new Blob(recChunks, {type:mimeType||'audio/webm'});
-    $('status').textContent='Recorded — listen before keeping'; $('status').className='status ok';
-    showReview();
-    autoPlay();
+  rec.onstart = () => {
+    // recorder engaged, but wait for the first real chunk before calling it "live"
+    $('status').textContent='Starting…'; $('status').className='status';
+    $('hold').classList.remove('holding'); $('hold').classList.add('starting');
+    $('hold').textContent='Starting… keep holding';
   };
-  rec.start(); // no timeslice → single clean segment with a proper header
-  $('status').textContent='● Recording… release when she\'s done'; $('status').className='status rec';
-  $('hold').classList.add('holding');
-  $('hold').textContent='Recording… release to stop';
+  rec.ondataavailable = e => {
+    if(e.data && e.data.size){
+      recChunks.push(e.data);
+      if(!audioLive){                // first real audio → NOW it's truly recording
+        audioLive = true;
+        recStart = Date.now();
+        $('status').textContent='● Recording — release when she\'s done'; $('status').className='status rec';
+        $('hold').classList.remove('starting'); $('hold').classList.add('holding');
+        $('hold').textContent='● Recording… release to stop';
+      }
+    }
+  };
+  rec.onstop = () => {
+    const held = audioLive ? (Date.now()-recStart) : 0;
+    const size = recChunks.reduce((s,c)=>s+c.size,0);
+    if(!audioLive || held < 300 || size < 800){
+      pendingBlob=null;
+      $('status').textContent='Didn\'t catch it — hold until the button turns RED, then let her speak';
+      $('status').className='status warn2';
+      $('hold').style.display='block';
+      hideReview();
+      return;
+    }
+    pendingBlob = new Blob(recChunks, {type:mimeType||'audio/webm'});
+    $('status').textContent='Got it — tap ▶ Play to check'; $('status').className='status ok';
+    showReview();
+  };
+  // timeslice of 100ms so the FIRST chunk (and thus the "live" signal) arrives quickly
+  rec.start(100);
+  $('status').textContent='Starting…'; $('status').className='status';
+  $('hold').classList.add('starting');
+  $('hold').textContent='Starting… keep holding';
 }
 function stopRec(){
-  $('hold').classList.remove('holding');
+  $('hold').classList.remove('holding','starting');
   $('hold').textContent='Press & hold to record';
   if(rec && rec.state==='recording') rec.stop();
 }
@@ -207,13 +242,16 @@ holdBtn.addEventListener('mousedown', startRec);
 holdBtn.addEventListener('mouseup',   stopRec);
 holdBtn.addEventListener('mouseleave',()=>{ if(rec&&rec.state==='recording') stopRec(); });
 
-function showReview(){ $('review').classList.add('show'); $('hold').style.display='none'; }
-function hideReview(){ $('review').classList.remove('show'); }
+function showReview(){ $('review').classList.add('show'); $('hold').style.display='none'; $('player').style.display='block'; }
+function hideReview(){ $('review').classList.remove('show'); $('player').style.display='none'; }
 
-function autoPlay(){ setTimeout(playPending, 250); }
+// iOS requires play() to be triggered by a direct tap, so Play is manual only.
 function playPending(){
   if(!pendingBlob) return;
-  const p=$('player'); p.src=URL.createObjectURL(pendingBlob); p.play().catch(()=>{});
+  const p=$('player');
+  p.src=URL.createObjectURL(pendingBlob);
+  p.load();
+  p.play().catch(err=>{ $('status').textContent='Tap ▶ Play again'; });
 }
 $('play').addEventListener('click', playPending);
 
